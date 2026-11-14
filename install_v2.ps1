@@ -3,44 +3,228 @@
 
 <#
 .SYNOPSIS
-Install applications, portable tools, and development environment configuration.
+Install Windows applications, portable tools, and development environment configuration.
+
+.DESCRIPTION
+Requires PowerShell 7 or newer on Windows. With no arguments, run these steps:
+1. Install the WinGet packages from WingetListPath.
+2. Install Visual Studio Community using WinGet.
+3. Install the VS Code extensions from VSCodeExtensionListPath.
+4. Install the configured portable tools, except their default exclusions.
+5. Download and extract the latest discovered Windows x64 Arm GNU Toolchain.
+6. Run the interactive Rust installer and add the Cargo bin directory to user PATH.
+7. Install VirtualBox and its extension pack with elevation.
+8. Configure Nushell to load zoxide and disable its startup banner.
+9. Create the separately configured Start Menu application shortcuts.
+
+All switches default to false: omit them to retain the normal behavior; specify
+them without a value to enable them. PowerShell also accepts -SwitchName:$false.
+Other than the two portable-tool lists, arguments must use their parameter names.
+The skip switches affect only their own steps, not packages in other steps.
+
+Use -WhatIf to preview instead of installing. Dry runs still write logs, read
+input lists, check prerequisites, and may fetch release metadata or create
+temporary discovery files. They are not offline or completely write-free.
+
+.PARAMETER WhatIf
+Input: switch. Default: false (perform installation).
+Preview the selected actions without downloading installer/tool payloads,
+running installers, extracting archives, deleting downloaded artifacts, changing
+PATH, or creating shortcuts. Metadata discovery and logging still occur.
+Example: .\install_v2.ps1 -WhatIf
+
+.PARAMETER WingetListPath
+Input: string path to an existing text file.
+Default: winget_install.txt beside this script ($PSScriptRoot).
+Read one WinGet package ID per line. Ignore blank lines, duplicate IDs, and
+full-line comments starting with # or //. Used unless -SkipWinget is set.
+Example: .\install_v2.ps1 -WingetListPath '.\packages.txt'
+
+.PARAMETER VSCodeExtensionListPath
+Input: string path to an existing, nonempty extension-list text file.
+Default: vscode_install.txt beside this script ($PSScriptRoot).
+Read one VS Code extension ID per line. Ignore blank lines and full-line #
+comments. Used unless -SkipVSCodeExtensions is set.
+Example: .\install_v2.ps1 -VSCodeExtensionListPath '.\extensions.txt'
+
+.PARAMETER InstallRoot
+Input: string directory path. Default: Join-Path $HOME 'terminal'.
+Root for Zigup, AnyZig, AnyZls, Clangd, Rufus, and the Arm GNU Toolchain.
+LanXchange instead uses C:\LanXchange; external installers choose their own
+installation locations. Creates this root outside dry-run mode.
+Example: .\install_v2.ps1 -InstallRoot 'D:\Tools'
+
+.PARAMETER DownloadRoot
+Input: string directory path. Default: Join-Path $HOME 'Downloads'.
+Staging directory for downloaded archives, installers, and the extension pack.
+Rufus is downloaded directly into its InstallRoot subdirectory instead.
+Successfully processed staging artifacts are removed after use.
+Example: .\install_v2.ps1 -DownloadRoot 'D:\InstallDownloads'
+
+.PARAMETER ArmToolchainUrl
+Input: string containing an absolute HTTP or HTTPS URL to a Windows x64
+Arm GNU Toolchain ZIP. Default: unset (discover the latest release from Arm's
+GitLab metadata). A supplied URL bypasses discovery. Ignored by -SkipArmToolchain.
+Example: .\install_v2.ps1 -ArmToolchainUrl $url
+Set $url to the direct ZIP download URL before running the example.
+
+.PARAMETER SkipWinget
+Input: switch. Default: false.
+Skip installation of packages from WingetListPath. Does not skip the separate
+Visual Studio step, which also uses WinGet.
+Example: .\install_v2.ps1 -SkipWinget
+
+.PARAMETER SkipVisualStudio
+Input: switch. Default: false.
+Skip the separate Visual Studio Community installation. Does not remove
+Visual Studio packages, if any, from the WinGet package-list step.
+Example: .\install_v2.ps1 -SkipVisualStudio
+
+.PARAMETER SkipVSCodeExtensions
+Input: switch. Default: false.
+Skip extension-list reading and extension installation. Does not prevent the
+WinGet package list from installing VS Code itself.
+Example: .\install_v2.ps1 -SkipVSCodeExtensions
 
 .PARAMETER SkipPortableTool
-With no positional lists, skip all portable tools.
-With one positional list, exclude those tools.
-With two positional lists, exclude the first list and explicitly include the second.
-Omitting this switch installs the configured tools except the default exclusions.
-Explicit inclusions override default exclusions.
+Input: switch followed by zero, one, or two positional tool lists.
+Default: false; install the catalog minus the configured default exclusions.
+With no lists, skip all portable tools.
+With one list, treat it as explicit exclusions.
+With two lists, treat the first as exclusions and the second as inclusions.
+An explicitly empty first list allows inclusion without explicit exclusions.
+An explicitly empty list is different from supplying no lists.
 
 Edit $script:PortableTools and $script:DefaultExcludedPortableTools in the
-configuration section to change available tools and default exclusions.
-Names are case-insensitive and duplicates are ignored.
-Explicit exclusions and inclusions must not overlap; invalid selections fail before installation.
-Lists require this switch. Other installer arguments must use their parameter names.
+configuration section to change the catalog and defaults. Currently the catalog
+is Zigup, AnyZig, AnyZls, Clangd, LanXchange, Rufus; only Zigup is excluded by default.
+Each catalog entry needs a matching Install-<name> function.
 
-Use PowerShell arrays or quoted comma-separated lists. For pwsh -File, use quoted
-comma-separated lists. An empty first list allows inclusion without explicit exclusions;
-an explicitly empty list is distinct from supplying no lists.
+Names are case-insensitive; whitespace is trimmed and duplicates are ignored.
+Unknown names, overlapping explicit exclusion/inclusion sets, a third list,
+and lists supplied without this switch are errors before installation.
+Inclusions override default exclusions, not explicit exclusions.
+Retained tools run in catalog order. Other installation steps are unaffected.
+
+Use PowerShell arrays or quoted comma-separated lists. With pwsh -File, use
+quoted comma-separated lists; use "" for an empty first list.
+Example: .\install_v2.ps1 -SkipPortableTool "Rufus,Clangd" "Zigup"
+
+.PARAMETER PortableToolExclusions
+Input: first positional list after -SkipPortableTool; string array or
+comma-separated string. Default: empty explicit exclusion list.
+Internal companion input, not a separate switch needed for normal use.
+Remove these tools from selection, in addition to the default exclusions.
+Example: .\install_v2.ps1 -SkipPortableTool Rufus,Clangd
+
+.PARAMETER PortableToolInclusions
+Input: second positional list after -SkipPortableTool; string array or
+comma-separated string. Default: empty explicit inclusion list.
+Internal companion input, not a separate switch needed for normal use.
+Enable tools otherwise excluded by default. This does not mean "install only
+these tools." Must not overlap the first list.
+Example: .\install_v2.ps1 -SkipPortableTool "" "Zigup"
+
+.PARAMETER SkipArmToolchain
+Input: switch. Default: false.
+Skip Arm release discovery, ZIP download/extraction, and its PATH update.
+Example: .\install_v2.ps1 -SkipArmToolchain
+
+.PARAMETER SkipRust
+Input: switch. Default: false.
+Skip rustup download/execution, Cargo existence checking, and its PATH update.
+Does not skip Rust-related packages in the WinGet list.
+Example: .\install_v2.ps1 -SkipRust
+
+.PARAMETER SkipVirtualBox
+Input: switch. Default: false.
+Skip VirtualBox installer and extension-pack discovery, downloads, and execution.
+Does not skip VirtualBox-related packages in the WinGet list.
+Example: .\install_v2.ps1 -SkipVirtualBox
+
+.PARAMETER SkipShellConfiguration
+Input: switch. Default: false.
+Skip Nushell/zoxide configuration. Does not skip installing the shell or zoxide
+if they are in the WinGet package list.
+Example: .\install_v2.ps1 -SkipShellConfiguration
+
+.PARAMETER SkipShortcuts
+Input: switch. Default: false.
+Skip only the final configured application-shortcut step. Does not suppress
+LanXchange or Rufus shortcuts created inside their portable-tool installers.
+Shortcuts target the executable and start in its parent directory.
+Example: .\install_v2.ps1 -SkipShortcuts
+
+.PARAMETER LogPath
+Input: string file path. Default: install.log beside this script ($PSScriptRoot).
+Write UTF-8 timestamped messages to the console and this file. Create the log's
+parent directory if missing. Normal runs clear an existing log first; dry runs
+append without clearing it.
+Example: .\install_v2.ps1 -WhatIf -LogPath '.\preview.log'
+
+.EXAMPLE
+.\install_v2.ps1 -WhatIf
+Preview the normal steps and default portable-tool selection. Logs and release
+metadata requests still occur; prerequisite/list/discovery failures are possible.
+
+.EXAMPLE
+.\install_v2.ps1
+Run all normal steps. Zigup is initially excluded by the configuration list.
+This performs real installation and may display interactive or elevation prompts.
+
+.EXAMPLE
+.\install_v2.ps1 -WhatIf -WingetListPath '.\packages.txt' -VSCodeExtensionListPath '.\extensions.txt' -InstallRoot 'D:\Tools' -DownloadRoot 'D:\InstallDownloads' -LogPath '.\preview.log'
+Preview with custom list files, install/download directories, and log path.
+The two input files must exist and contain the expected IDs.
+
+.EXAMPLE
+.\install_v2.ps1 -SkipWinget -SkipVisualStudio -SkipVSCodeExtensions
+Skip the three application/extension steps. The remaining steps still run.
 
 .EXAMPLE
 .\install_v2.ps1 -SkipPortableTool
-Skip all portable tools.
+Skip all portable tools; other steps still run.
 
 .EXAMPLE
 .\install_v2.ps1 -SkipPortableTool Rufus,Clangd
 Exclude Rufus and Clangd. Other default exclusions still apply.
 
 .EXAMPLE
-pwsh -NoProfile -File .\install_v2.ps1 -SkipPortableTool "Rufus,Clangd" "Zigup"
-Exclude Rufus and Clangd, and enable Zigup. Other default exclusions still apply.
+pwsh -NoProfile -File .\install_v2.ps1 -WhatIf -SkipPortableTool "Rufus,Clangd" "Zigup"
+Preview excluding Rufus and Clangd while enabling Zigup.
 
 .EXAMPLE
-pwsh -NoProfile -File .\install_v2.ps1 -SkipPortableTool "" "Zigup"
-Enable Zigup without explicit exclusions. Other default exclusions still apply.
+pwsh -NoProfile -File .\install_v2.ps1 -WhatIf -SkipPortableTool "" "Zigup"
+Preview enabling Zigup without explicit exclusions. Other defaults still apply.
+
+.EXAMPLE
+.\install_v2.ps1 -SkipPortableTool Zigup zigup
+Reject overlapping explicit lists, regardless of casing, before installation.
 
 .EXAMPLE
 pwsh -NoProfile -File .\install_v2.ps1 -SkipWinget -SkipPortableTool -SkipRust -SkipVirtualBox -SkipVisualStudio -SkipArmToolchain -SkipVSCodeExtensions -SkipShellConfiguration -SkipShortcuts
-Skips Everything.
+Skip every installation/configuration step. Directory initialization and logging
+still occur; add -WhatIf to suppress installation/download directory creation.
+
+.EXAMPLE
+Get-Help .\install_v2.ps1 -Full
+Display all option details, defaults, examples, and notes without installing.
+Use -Examples for examples, -Parameter SkipPortableTool for portable selection,
+or .\install_v2.ps1 -? for help. --help and /help are not supported.
+
+.NOTES
+Summary: defaults run every step, subject to default portable-tool exclusions.
+Use -WhatIf to preview; -Skip* switches disable their respective steps.
+Use -SkipPortableTool with two lists to exclude tools and re-enable defaults.
+Customize paths with the *Path/*Root options and ArmToolchainUrl.
+
+Path inputs may be absolute or relative; relative paths use the working directory.
+Skip switches do not uninstall anything or override entries in other steps.
+Some steps require curl.exe, winget.exe, the VS Code CLI, Nushell, or zoxide.
+Real runs may update user PATH, create Start Menu shortcuts, and request elevation.
+Most step failures are logged while later steps continue; failures produce exit
+code 1. Invalid portable selections terminate before directory/log initialization.
+PowerShell supplies common parameters too; see Get-Help about_CommonParameters.
 #>
 [CmdletBinding(PositionalBinding = $false)]
 param(
