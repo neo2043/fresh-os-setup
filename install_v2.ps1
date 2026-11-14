@@ -102,6 +102,7 @@ $ErrorActionPreference = 'Stop'
 $script:PortableTools = @(
     'Zigup'
     'AnyZig'
+    'AnyZls'
     'Clangd'
     'LanXchange'
     'Rufus'
@@ -880,6 +881,17 @@ function Install-AnyZig {
     $uri = 'https://github.com/marler8997/anyzig/releases/latest/download/anyzig-x86_64-windows.zip'
     $archive = Join-Path $script:Downloads 'anyzig-x86_64-windows.zip'
     $destination = Join-Path $script:InstallRoot 'anyzig-x86_64-windows'
+
+    Save-Download -Uri $uri -Destination $archive
+    Expand-DownloadedArchive -ArchivePath $archive -Destination $destination
+    Remove-DownloadedArtifact -Path $archive
+    Add-UserPath -Path $destination
+}
+
+function Install-AnyZls {
+    $uri = 'https://github.com/marler8997/anyzig/releases/latest/download/anyzls-x86_64-windows.zip'
+    $archive = Join-Path $script:Downloads 'anyzls-x86_64-windows.zip'
+    $destination = Join-Path $script:InstallRoot 'anyzls-x86_64-windows'
 
     Save-Download -Uri $uri -Destination $archive
     Expand-DownloadedArchive -ArchivePath $archive -Destination $destination
