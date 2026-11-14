@@ -1,4 +1,4 @@
-# New Install
+# Fresh OS Setup
 
 Personal Windows workstation setup scripts for installing applications, development tools, editor extensions, and shell configuration.
 
