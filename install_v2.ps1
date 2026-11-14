@@ -1,19 +1,48 @@
-# pwsh -NoProfile -File .\new_install.ps1 -skipwinget -skipportabletools -skiprust -skipvirtualbox -skipvisualstudio -skiparmtoolchain -skipvscodeextension -skipshellconfiguration -skipshortcuts
+# pwsh -NoProfile -File .\install_v2.ps1 -SkipWinget -SkipPortableTool -SkipRust -SkipVirtualBox -SkipVisualStudio -SkipArmToolchain -SkipVSCodeExtensions -SkipShellConfiguration -SkipShortcuts
 #requires -Version 7.0
 
 <#
-.PARAMETER SkipPortableTools
-Skip all portable tools. Takes precedence over SkipPortableTool.
+.SYNOPSIS
+Install applications, portable tools, and development environment configuration.
 
 .PARAMETER SkipPortableTool
-Skip selected portable tools: AnyZig, Clangd, LanXchange, or Rufus.
-Omit this parameter to install all portable tools.
+With no positional lists, skip all portable tools.
+With one positional list, exclude those tools.
+With two positional lists, exclude the first list and explicitly include the second.
+Omitting this switch installs the configured tools except the default exclusions.
+Explicit inclusions override default exclusions.
+
+Edit $script:PortableTools and $script:DefaultExcludedPortableTools in the
+configuration section to change available tools and default exclusions.
+Names are case-insensitive and duplicates are ignored.
+Explicit exclusions and inclusions must not overlap; invalid selections fail before installation.
+Lists require this switch. Other installer arguments must use their parameter names.
+
+Use PowerShell arrays or quoted comma-separated lists. For pwsh -File, use quoted
+comma-separated lists. An empty first list allows inclusion without explicit exclusions;
+an explicitly empty list is distinct from supplying no lists.
 
 .EXAMPLE
-.\new_install.ps1 -SkipPortableTool AnyZig,Clangd
-Run from PowerShell to skip AnyZig and Clangd while installing the other tools.
+.\install_v2.ps1 -SkipPortableTool
+Skip all portable tools.
+
+.EXAMPLE
+.\install_v2.ps1 -SkipPortableTool Rufus,Clangd
+Exclude Rufus and Clangd. Other default exclusions still apply.
+
+.EXAMPLE
+pwsh -NoProfile -File .\install_v2.ps1 -SkipPortableTool "Rufus,Clangd" "Zigup"
+Exclude Rufus and Clangd, and enable Zigup. Other default exclusions still apply.
+
+.EXAMPLE
+pwsh -NoProfile -File .\install_v2.ps1 -SkipPortableTool "" "Zigup"
+Enable Zigup without explicit exclusions. Other default exclusions still apply.
+
+.EXAMPLE
+pwsh -NoProfile -File .\install_v2.ps1 -SkipWinget -SkipPortableTool -SkipRust -SkipVirtualBox -SkipVisualStudio -SkipArmToolchain -SkipVSCodeExtensions -SkipShellConfiguration -SkipShortcuts
+Skips Everything.
 #>
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [switch]$WhatIf,
 
@@ -38,10 +67,17 @@ param(
     [switch]$SkipWinget,
     [switch]$SkipVisualStudio,
     [switch]$SkipVSCodeExtensions,
-    [switch]$SkipPortableTools,
+    [switch]$SkipPortableTool,
 
-    [ValidateSet('Zigup' ,'AnyZig', 'Clangd', 'LanXchange', 'Rufus')]
-    [string[]]$SkipPortableTool = @(),
+    [Parameter(Position = 0, DontShow = $true)]
+    [AllowEmptyCollection()]
+    [AllowEmptyString()]
+    [string[]]$PortableToolExclusions = @(),
+
+    [Parameter(Position = 1, DontShow = $true)]
+    [AllowEmptyCollection()]
+    [AllowEmptyString()]
+    [string[]]$PortableToolInclusions = @(),
 
     [switch]$SkipArmToolchain,
     [switch]$SkipRust,
@@ -60,6 +96,66 @@ $ErrorActionPreference = 'Stop'
 # ---------------------------------------------------------------------------
 # Configuration and state
 # ---------------------------------------------------------------------------
+
+# Edit these lists to configure available tools and their default exclusions.
+# Each tool name must have a matching Install-<name> function below.
+$script:PortableTools = @(
+    'Zigup'
+    'AnyZig'
+    'Clangd'
+    'LanXchange'
+    'Rufus'
+)
+$script:DefaultExcludedPortableTools = @(
+    'Zigup'
+)
+
+$script:ExcludedPortableTools = [Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+$includedPortableTools = [Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::OrdinalIgnoreCase
+)
+$hasPortableToolLists = (
+    $PSBoundParameters.ContainsKey('PortableToolExclusions') -or
+    $PSBoundParameters.ContainsKey('PortableToolInclusions')
+)
+
+if ($hasPortableToolLists -and -not $SkipPortableTool) {
+    throw 'Portable tool lists require -SkipPortableTool.'
+}
+
+foreach ($selection in @(
+    @{ Values = $PortableToolExclusions; Set = $script:ExcludedPortableTools },
+    @{ Values = $PortableToolInclusions; Set = $includedPortableTools }
+)) {
+    foreach ($value in $selection.Values) {
+        foreach ($entry in ($value -split ',')) {
+            $tool = $entry.Trim()
+            if ($tool -eq '') {
+                continue
+            }
+            if ($script:PortableTools -notcontains $tool) {
+                throw "Unknown portable tool '$tool'. Valid tools: $($script:PortableTools -join ', ')."
+            }
+            [void]$selection.Set.Add($tool)
+        }
+    }
+}
+
+if ($script:ExcludedPortableTools.Overlaps($includedPortableTools)) {
+    $conflicts = $script:PortableTools | Where-Object {
+        $script:ExcludedPortableTools.Contains($_) -and $includedPortableTools.Contains($_)
+    }
+    throw "Portable tools cannot be both excluded and included: $($conflicts -join ', ')."
+}
+
+# Explicit inclusion overrides default exclusions, not explicit skips.
+$script:ExcludedPortableTools.UnionWith([string[]]$script:DefaultExcludedPortableTools)
+$script:ExcludedPortableTools.ExceptWith($includedPortableTools)
+if ($SkipPortableTool -and -not $hasPortableToolLists) {
+    $script:ExcludedPortableTools.UnionWith([string[]]$script:PortableTools)
+}
 
 $script:DryRun = $WhatIf.IsPresent
 $script:Failures = [System.Collections.Generic.List[string]]::new()
@@ -874,8 +970,8 @@ function Install-Rufus {
 }
 
 function Install-PortableTools {
-    foreach ($tool in @('Zigup' ,'AnyZig', 'Clangd', 'LanXchange', 'Rufus')) {
-        if ($SkipPortableTool -contains $tool) {
+    foreach ($tool in $script:PortableTools) {
+        if ($script:ExcludedPortableTools.Contains($tool)) {
             Write-Log "Skipping portable tool: $tool"
             continue
         }
@@ -1147,10 +1243,8 @@ try {
         }
     }
 
-    if (-not $SkipPortableTools) {
-        Invoke-InstallationStep -Name 'Portable tools' -Action {
-            Install-PortableTools
-        }
+    Invoke-InstallationStep -Name 'Portable tools' -Action {
+        Install-PortableTools
     }
 
     if (-not $SkipArmToolchain) {
