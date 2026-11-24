@@ -162,7 +162,7 @@ The current ordered catalog is:
 | `Clangd` | Included. | Release directory beneath `InstallRoot`; its `bin` directory is added to PATH. |
 | `LanXchange` | Included. | `C:\LanXchange`, independent of `InstallRoot`. |
 | `Rufus` | Included. | `InstallRoot\Rufus`. |
-| `SleuthKit` | Included. | Latest `tsk-x86_64-windows.zip` from `neo2043/comp`, extracted to `InstallRoot\sleuthkit`; `x64\Release_NoLibs` is added to user PATH. |
+| `TSK` | Included. | Latest Sleuth Kit `tsk-x86_64-windows.zip` from `neo2043/comp`, extracted to `InstallRoot\sleuthkit`; `x64\Release_NoLibs` is added to user PATH. |
 
 Use one switch with up to two lists:
 

@@ -97,7 +97,7 @@ An explicitly empty list is different from supplying no lists.
 
 Edit $script:PortableTools and $script:DefaultExcludedPortableTools in the
 configuration section to change the catalog and defaults. Currently the catalog
-is Zigup, AnyZig, AnyZls, Clangd, LanXchange, Rufus, SleuthKit;
+is Zigup, AnyZig, AnyZls, Clangd, LanXchange, Rufus, TSK;
 only Zigup is excluded by default.
 Each catalog entry needs a matching Install-<name> function.
 
@@ -291,7 +291,7 @@ $script:PortableTools = @(
     'Clangd'
     'LanXchange'
     'Rufus'
-    'SleuthKit'
+    'TSK'
 )
 $script:DefaultExcludedPortableTools = @(
     'Zigup'
@@ -1167,7 +1167,7 @@ function Install-Rufus {
         -TargetPath $destination
 }
 
-function Install-SleuthKit {
+function Install-TSK {
     $uri = Get-GitHubLatestAsset `
         -Repository 'neo2043/comp' `
         -AssetPattern '^tsk-x86_64-windows\.zip$'
