@@ -70,7 +70,7 @@ For a preview that needs neither local input list, skip their consumers and othe
 pwsh -NoProfile -File .\windows\install_v2.ps1 -WhatIf -SkipWinget -SkipVisualStudio -SkipVSCodeExtensions -SkipArmToolchain -SkipVirtualBox -SkipShellConfiguration -SkipShortcuts -SkipPortableTool "Clangd,Rufus"
 ```
 
-This previews AnyZig, AnyZls, LanXchange, and Rust. Zigup remains excluded by default. No tool payloads are downloaded or installed.
+This previews AnyZig, AnyZls, LanXchange, Sleuth Kit, and Rust. Zigup remains excluded by default. No tool payloads are downloaded or installed.
 
 ### 4. Run the installer
 
@@ -162,6 +162,7 @@ The current ordered catalog is:
 | `Clangd` | Included. | Release directory beneath `InstallRoot`; its `bin` directory is added to PATH. |
 | `LanXchange` | Included. | `C:\LanXchange`, independent of `InstallRoot`. |
 | `Rufus` | Included. | `InstallRoot\Rufus`. |
+| `SleuthKit` | Included. | Latest `tsk-x86_64-windows.zip` from `neo2043/comp`, extracted to `InstallRoot\sleuthkit`; `x64\Release_NoLibs` is added to user PATH. |
 
 Use one switch with up to two lists:
 

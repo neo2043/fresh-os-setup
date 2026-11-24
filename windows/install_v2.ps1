@@ -49,7 +49,7 @@ Example: .\install_v2.ps1 -VSCodeExtensionListPath '.\extensions.txt'
 
 .PARAMETER InstallRoot
 Input: string directory path. Default: Join-Path $HOME 'terminal'.
-Root for Zigup, AnyZig, AnyZls, Clangd, Rufus, and the Arm GNU Toolchain.
+Root for Zigup, AnyZig, AnyZls, Clangd, Rufus, Sleuth Kit, and the Arm GNU Toolchain.
 LanXchange instead uses C:\LanXchange; external installers choose their own
 installation locations. Creates this root outside dry-run mode.
 Example: .\install_v2.ps1 -InstallRoot 'D:\Tools'
@@ -97,7 +97,8 @@ An explicitly empty list is different from supplying no lists.
 
 Edit $script:PortableTools and $script:DefaultExcludedPortableTools in the
 configuration section to change the catalog and defaults. Currently the catalog
-is Zigup, AnyZig, AnyZls, Clangd, LanXchange, Rufus; only Zigup is excluded by default.
+is Zigup, AnyZig, AnyZls, Clangd, LanXchange, Rufus, SleuthKit;
+only Zigup is excluded by default.
 Each catalog entry needs a matching Install-<name> function.
 
 Names are case-insensitive; whitespace is trimmed and duplicates are ignored.
@@ -290,6 +291,7 @@ $script:PortableTools = @(
     'Clangd'
     'LanXchange'
     'Rufus'
+    'SleuthKit'
 )
 $script:DefaultExcludedPortableTools = @(
     'Zigup'
@@ -1163,6 +1165,20 @@ function Install-Rufus {
     New-StartMenuShortcut `
         -Name 'Rufus' `
         -TargetPath $destination
+}
+
+function Install-SleuthKit {
+    $uri = Get-GitHubLatestAsset `
+        -Repository 'neo2043/comp' `
+        -AssetPattern '^tsk-x86_64-windows\.zip$'
+    $archive = Join-Path $script:Downloads 'tsk-x86_64-windows.zip'
+    $destination = Join-Path $script:InstallRoot 'sleuthkit'
+    $bin = Join-Path $destination 'x64' 'Release_NoLibs'
+
+    Save-Download -Uri $uri -Destination $archive
+    Expand-DownloadedArchive -ArchivePath $archive -Destination $destination
+    Remove-DownloadedArtifact -Path $archive
+    Add-UserPath -Path $bin
 }
 
 function Install-PortableTools {
